@@ -1,0 +1,19 @@
+{
+    "name": "@game-gpt/rgss-darwin-x64",
+    "version": "0.0.0",
+    "private": true,
+    "description": "RGSS native N-API addon (darwin-x64)",
+    "license": "Apache-2.0",
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "rgss.darwin-x64.node",
+    "files": [
+        "rgss.darwin-x64.node",
+        "README.md"
+    ],
+    "preferUnplugged": true
+}

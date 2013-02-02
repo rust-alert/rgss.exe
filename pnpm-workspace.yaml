@@ -1,0 +1,4 @@
+packages:
+  - "projects/hosts/*"
+  - "projects/platforms/native/*"
+  - "projects/platforms/wasm/*"

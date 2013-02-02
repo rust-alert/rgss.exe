@@ -1,0 +1,21 @@
+{
+    "name": "rgss",
+    "private": true,
+    "description": "RPG Maker 工作区。产品入口为 @game-gpt/rgss。",
+    "packageManager": "pnpm@11.24.0",
+    "scripts": {
+        "fmt": "node scripts/format.mjs",
+        "launch": "node scripts/launch.mjs",
+        "scan:content": "node scripts/scan-content.mjs",
+        "build": "pnpm --filter @game-gpt/rgss --filter @game-gpt/rgss-unknown-wasm32 build",
+        "typecheck": "pnpm --filter @game-gpt/rgss typecheck",
+        "napi:build": "node scripts/build/napi.mjs",
+        "napi:build:release": "node scripts/build/napi.mjs --release"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "2.5.14",
+        "@game-gpt/rgss": "workspace:*",
+        "@types/node": "^26.6.1",
+        "typescript": "^5.9.3"
+    }
+}

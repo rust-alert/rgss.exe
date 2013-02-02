@@ -1,0 +1,26 @@
+[package]
+name = "rgss-napi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "RGSS Node-API：供 @game-gpt/rgss 的 detect 命令调用"
+keywords = ["rgss", "napi", "nodejs"]
+categories = ["game-development", "api-bindings"]
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+node = ["dep:napi", "dep:napi-derive"]
+
+[dependencies]
+rgss-game = { workspace = true }
+napi = { workspace = true, optional = true }
+napi-derive = { workspace = true, optional = true }
+
+[package.metadata.napi]
+name = "@game-gpt/rgss"

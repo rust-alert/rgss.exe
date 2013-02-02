@@ -1,0 +1,19 @@
+{
+    "name": "@game-gpt/rgss-win32-x64",
+    "version": "0.0.0",
+    "private": true,
+    "description": "RGSS native N-API addon (win32-x64)",
+    "license": "Apache-2.0",
+    "os": [
+        "win32"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "main": "rgss.win32-x64-msvc.node",
+    "files": [
+        "rgss.win32-x64-msvc.node",
+        "README.md"
+    ],
+    "preferUnplugged": true
+}

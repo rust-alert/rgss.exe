@@ -1,0 +1,15 @@
+[package]
+name = "rgss-wasm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "RGSS Wasm cdylib：导出 C ABI，产物拷至 projects/platforms/wasm/rgss-unknown-wasm32"
+keywords = ["rgss", "wasm"]
+categories = ["game-development", "wasm"]
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"

@@ -1,0 +1,17 @@
+[package]
+name = "rgss-game"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "RGSS 游戏根校验。仅由 rgss-napi 拉起，不提供独立二进制入口"
+keywords = ["rgss", "rpg-maker"]
+categories = ["game-development"]
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+rgss-core = { workspace = true }

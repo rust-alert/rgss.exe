@@ -1,0 +1,25 @@
+# IDE
+.idea/
+*.log
+*.txt
+
+# Rust
+target/
+
+# 本机把 Spark git 依赖覆盖成 path。模板见 `.cargo/config.toml.example`。
+.cargo/config.toml
+
+# Node
+node_modules/
+dist/
+*.node
+*.wasm
+
+# Terraria 安装内容及其派生产物只能位于仓库外
+Content/
+content-cache/
+metadata-cache/
+derived-content/
+*.xnb
+*.wld
+*.plr

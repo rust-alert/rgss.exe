@@ -1,0 +1,11 @@
+[package]
+name = "rgss-types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+readme.workspace = true
+description = "RGSS 共享类型占位。检测在 rgss-core"
+keywords = ["rgss"]
+categories = ["game-development"]
+publish = false
