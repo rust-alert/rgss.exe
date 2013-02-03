@@ -22,6 +22,7 @@ rgss-game = { path = "projects/engine/rgss-game" }
 rgss-napi = { path = "projects/bindings/rgss-napi" }
 rgss-wasm = { path = "projects/bindings/rgss-wasm" }
 encoding_rs = "0.8"
+flate2 = "1"
 napi = { version = "2", default-features = false, features = ["napi4"] }
 napi-derive = "2"
 

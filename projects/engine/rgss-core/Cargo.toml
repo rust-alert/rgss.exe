@@ -5,10 +5,11 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "RPG Maker 游戏根检测：2000 / 2003 / XP / VX / VX Ace"
+description = "RPG Maker 游戏根检测与 Scripts 包加载"
 keywords = ["rgss", "rpg-maker"]
 categories = ["game-development"]
 publish = false
 
 [dependencies]
 encoding_rs = { workspace = true }
+flate2 = { workspace = true }
