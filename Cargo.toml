@@ -25,6 +25,13 @@ encoding_rs = "0.8"
 flate2 = "1"
 napi = { version = "2", default-features = false, features = ["napi4"] }
 napi-derive = "2"
+# Spark：脚本链路。本机 path 覆盖放在已 gitignore 的 `.cargo/config.toml`。
+spark-script-ruby = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
+spark-vm = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
+spark-gc = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
+spark-core = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
+spark-engine = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
+spark-renderer = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
 
 [profile.release]
 opt-level = 3

@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 readme.workspace = true
-description = "RGSS 游戏根校验。仅由 rgss-napi 拉起，不提供独立二进制入口"
+description = "RGSS 游戏根：检测与 Spark Ruby 执行"
 keywords = ["rgss", "rpg-maker"]
 categories = ["game-development"]
 publish = false
@@ -13,5 +13,15 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "rgss"
+path = "src/main.rs"
+
 [dependencies]
 rgss-core = { workspace = true }
+spark-script-ruby = { workspace = true }
+spark-vm = { workspace = true }
+spark-gc = { workspace = true }
+spark-core = { workspace = true }
+spark-engine = { workspace = true }
+spark-renderer = { workspace = true }
