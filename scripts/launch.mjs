@@ -1,5 +1,5 @@
 /**
- * `pnpm launch`：编译当前 Rust 与 TypeScript，再检测游戏根。
+ * `pnpm launch`：编译原生与 TypeScript，再 `rgss --path <游戏根>` 开窗口。
  *
  *   pnpm launch -- --path <游戏根>
  *   pnpm launch -- --path <游戏根> --release
@@ -21,6 +21,7 @@ function run(command, args) {
         cwd: root,
         stdio: "inherit",
         windowsHide: false,
+        shell: process.platform === "win32" && command === "cargo",
     });
     if (result.error) {
         fail(result.error.message);
@@ -65,10 +66,16 @@ function resolveTypescript() {
 function main() {
     const { gameRoot, release } = parseArgs(process.argv.slice(2));
     const napiArgs = [path.join(root, "scripts", "build", "napi.mjs")];
+    const profile = release ? "release" : "dev";
     if (release) {
         napiArgs.push("--release");
     }
     run(process.execPath, napiArgs);
+    const cargoArgs = ["build", "-p", "rgss-game", "--bin", "rgss"];
+    if (release) {
+        cargoArgs.push("--release");
+    }
+    run("cargo", cargoArgs);
     run(process.execPath, [
         resolveTypescript(),
         "-p",
@@ -76,10 +83,10 @@ function main() {
     ]);
     run(process.execPath, [
         path.join(root, "projects", "hosts", "rgss", "dist", "cli.js"),
-        "detect",
         "--path",
         gameRoot,
     ]);
+    void profile;
 }
 
 main();

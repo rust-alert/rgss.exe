@@ -1,7 +1,7 @@
 {
     "name": "@game-gpt/rgss",
     "version": "0.0.0",
-    "description": "RPG Maker 游戏根检测。命令：rgss detect --path <游戏根>",
+    "description": "RPG Maker 游戏根。命令：rgss --path <游戏根>",
     "type": "commonjs",
     "bin": {
         "rgss": "./dist/cli.js"

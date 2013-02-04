@@ -27,6 +27,7 @@ const nodeRequire = createRequire(__filename);
 export interface RgssHostBindings {
     info(): { name: string; version: string; npmPackage: string };
     detect(path: string): DetectBindings;
+    play(path: string): PlayBindings;
 }
 
 export interface DetectBindings {
@@ -36,6 +37,17 @@ export interface DetectBindings {
     scriptsPath: string;
     title: string;
     summary: string;
+}
+
+export interface PlayBindings {
+    engine: string;
+    total: number;
+    compiled: number;
+    empty: number;
+    ranEntry: boolean;
+    runDetail: string;
+    summary: string;
+    failures: string[];
 }
 
 interface RgssAddon {
@@ -49,6 +61,16 @@ interface RgssAddon {
             title: string;
             summary: string;
         };
+        play(path: string): {
+            engine: string;
+            total: number;
+            compiled: number;
+            empty: number;
+            ran_entry: boolean;
+            run_detail: string;
+            summary: string;
+            failures: string[];
+        };
     };
 }
 
@@ -60,7 +82,7 @@ let cached: RgssHostBindings | undefined;
 
 /**
  * 加载当前平台原生绑定。
- * 游戏根识别走 `host.detect(gameRoot)`。
+ * `detect` / `play` 走游戏根路径。
  */
 export function loadRgss(options: LoadOptions = {}): RgssHostBindings {
     if (cached) return cached;
@@ -95,6 +117,19 @@ export function loadRgss(options: LoadOptions = {}): RgssHostBindings {
                 scriptsPath: report.scripts_path,
                 title: report.title,
                 summary: report.summary,
+            };
+        },
+        play: (gameRoot) => {
+            const report = host.play(gameRoot);
+            return {
+                engine: report.engine,
+                total: report.total,
+                compiled: report.compiled,
+                empty: report.empty,
+                ranEntry: report.ran_entry,
+                runDetail: report.run_detail,
+                summary: report.summary,
+                failures: report.failures,
             };
         },
     };
