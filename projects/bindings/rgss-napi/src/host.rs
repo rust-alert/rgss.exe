@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use rgss_game::{DetectReport, validate_game_root};
+use rgss_game::{DetectReport, PlayReport, play_game_root, validate_game_root};
 
 /// 给命令行看的包信息。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,7 +25,7 @@ impl Default for HostInfo {
     }
 }
 
-/// 检测游戏根。不打开窗口。
+/// 检测 / play 宿主。不打开窗口。
 #[derive(Debug, Default)]
 pub struct RgssHost;
 
@@ -43,5 +43,10 @@ impl RgssHost {
     /// 识别 2000 / 2003 / XP / VX / VX Ace。MV / MZ 失败。
     pub fn detect(&self, path: &str) -> Result<DetectReport, String> {
         validate_game_root(Path::new(path))
+    }
+
+    /// 加载 Scripts 并经 oak-ruby → spark-script-ruby → spark-vm 编译执行。
+    pub fn play(&self, path: &str) -> Result<PlayReport, String> {
+        play_game_root(Path::new(path)).map_err(|e| e.to_string())
     }
 }

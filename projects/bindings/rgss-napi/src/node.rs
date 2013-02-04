@@ -22,6 +22,18 @@ pub struct JsDetectReport {
     pub summary: String,
 }
 
+#[napi(object)]
+pub struct JsPlayReport {
+    pub engine: String,
+    pub total: u32,
+    pub compiled: u32,
+    pub empty: u32,
+    pub ran_entry: bool,
+    pub run_detail: String,
+    pub summary: String,
+    pub failures: Vec<String>,
+}
+
 #[napi]
 pub struct JsRgssHost {
     inner: RgssHost,
@@ -50,13 +62,37 @@ impl JsRgssHost {
     #[napi]
     pub fn detect(&self, path: String) -> Result<JsDetectReport> {
         let report = self.inner.detect(&path).map_err(Error::from_reason)?;
+        let summary = report.summary_line();
         Ok(JsDetectReport {
             engine: report.engine.label().into(),
             script: report.script.label().into(),
             library: report.library.unwrap_or_default(),
             scripts_path: report.scripts_path.unwrap_or_default(),
             title: report.title.unwrap_or_default(),
-            summary: report.summary_line(),
+            summary,
+        })
+    }
+
+    /// `rgss play --path`。
+    #[napi]
+    pub fn play(&self, path: String) -> Result<JsPlayReport> {
+        let report = self.inner.play(&path).map_err(Error::from_reason)?;
+        let failures: Vec<String> = report
+            .statuses
+            .iter()
+            .filter(|s| !s.ok)
+            .map(|s| format!("[{}] {}: {}", s.index, s.name, s.detail))
+            .collect();
+        let summary = report.summary_line();
+        Ok(JsPlayReport {
+            engine: report.engine.clone(),
+            total: report.total as u32,
+            compiled: report.compiled as u32,
+            empty: report.empty as u32,
+            ran_entry: report.ran_entry,
+            run_detail: report.run_detail.clone(),
+            summary,
+            failures,
         })
     }
 }
