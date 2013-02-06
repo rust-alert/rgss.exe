@@ -69,6 +69,20 @@ fn decodes_shift_jis_title() {
 }
 
 #[test]
+fn decodes_gbk_title() {
+    let dir = scratch();
+    let mut ini = b"[Game]\r\nLibrary=RGSS103J.dll\r\nTitle=".to_vec();
+    // 「罪途」GBK
+    ini.extend_from_slice(&[0xD7, 0xEF, 0xCD, 0xBE]);
+    ini.extend_from_slice(b"\r\n");
+    write(&dir, "Game.ini", &ini);
+    let report = detect_game_root(&dir).unwrap();
+    assert_eq!(report.engine, MakerEngine::Xp);
+    assert_eq!(report.title.as_deref(), Some("罪途"));
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
 fn detects_vx_and_ace() {
     let vx = scratch();
     write(

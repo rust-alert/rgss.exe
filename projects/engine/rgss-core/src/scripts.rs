@@ -172,13 +172,7 @@ fn decode_script_array(root: &MarshalValue) -> Result<Vec<ScriptEntry>, ScriptsE
 }
 
 fn decode_name(bytes: &[u8]) -> String {
-    if let Ok(s) = std::str::from_utf8(bytes) {
-        return s.to_string();
-    }
-    encoding_rs::SHIFT_JIS
-        .decode(bytes)
-        .0
-        .into_owned()
+    crate::detect::decode_legacy_bytes(bytes)
 }
 
 fn inflate_script(blob: &[u8]) -> Result<String, ScriptsError> {
@@ -187,10 +181,7 @@ fn inflate_script(blob: &[u8]) -> Result<String, ScriptsError> {
     decoder
         .read_to_end(&mut out)
         .map_err(|e| ScriptsError::Inflate(e.to_string()))?;
-    if let Ok(s) = std::str::from_utf8(&out) {
-        return Ok(s.to_string());
-    }
-    Ok(encoding_rs::SHIFT_JIS.decode(&out).0.into_owned())
+    Ok(crate::detect::decode_legacy_bytes(&out))
 }
 
 /// 去掉 `=begin` / `=end` 块与行注释前的空白行压缩，保留可执行源码。

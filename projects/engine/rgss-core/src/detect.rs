@@ -523,13 +523,51 @@ fn file_name_only(value: &str) -> String {
 }
 
 fn decode_text(bytes: &[u8]) -> String {
+    decode_legacy_bytes(bytes)
+}
+
+/// RPG Maker 本地化文本：UTF-8，或中文 GBK / 日文 Shift_JIS。
+/// 按解码错误、替换符，以及假名 / 汉字密度打分，避免互解乱码。
+pub(crate) fn decode_legacy_bytes(bytes: &[u8]) -> String {
     let bytes = bytes
         .strip_prefix(&[0xEF, 0xBB, 0xBF])
         .unwrap_or(bytes);
     if let Ok(text) = std::str::from_utf8(bytes) {
         return text.to_string();
     }
-    encoding_rs::SHIFT_JIS.decode(bytes).0.into_owned()
+    let candidates = [encoding_rs::GBK, encoding_rs::SHIFT_JIS];
+    let mut best: Option<(i32, String)> = None;
+    for enc in candidates {
+        let (cow, _, had_errors) = enc.decode(bytes);
+        let text = cow.into_owned();
+        let score = score_legacy_text(&text, had_errors);
+        let better = match &best {
+            None => true,
+            Some((s, _)) => score > *s,
+        };
+        if better {
+            best = Some((score, text));
+        }
+    }
+    best.map(|(_, t)| t).unwrap_or_default()
+}
+
+fn score_legacy_text(text: &str, had_errors: bool) -> i32 {
+    let mut score: i32 = 0;
+    if had_errors {
+        score -= 10_000;
+    }
+    for ch in text.chars() {
+        match ch {
+            '\u{FFFD}' => score -= 100,
+            '\u{3040}'..='\u{30FF}' | '\u{31F0}'..='\u{31FF}' => score += 5, // 平假名 / 片假名
+            '\u{4E00}'..='\u{9FFF}' => score += 2,                             // 汉字
+            '\u{3400}'..='\u{4DBF}' => score += 2,
+            c if c.is_ascii_graphic() || c.is_ascii_whitespace() => score += 1,
+            _ => score -= 1,
+        }
+    }
+    score
 }
 
 fn read_named(root: &Path, name: &str) -> Option<String> {
