@@ -1,12 +1,13 @@
 //! 经 `spark-script-ruby` → `spark-vm` 编译并执行 RGSS 脚本包。
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
 use rgss_core::{
-    ScriptPack, ScriptsError, detect_game_root, load_scripts_with_report, strip_rgss_comments,
+    MarshalValue, ScriptPack, ScriptsError, detect_game_root, load_marshal,
+    load_scripts_with_report, strip_rgss_comments,
 };
 use spark_gc::{GcObject, Value};
 use spark_script_ruby::{self, RubyScriptError};
@@ -144,6 +145,8 @@ impl Default for FrameSync {
 pub struct PlaySession {
     /// 检测标题（窗口用）。
     pub title: String,
+    /// 游戏根路径（资源加载）。
+    pub game_root: std::path::PathBuf,
     /// 链接后的方法表。
     pub linked: Module,
     /// 按 Scripts 顺序的 `(名, 模块)`。
@@ -170,11 +173,15 @@ pub fn prepare_game_root(path: &Path) -> Result<PlaySession, PlayError> {
         .title
         .clone()
         .unwrap_or_else(|| "RGSS".into());
-    Ok(prepare_script_pack(&pack, title))
+    Ok(prepare_script_pack(&pack, title, path.to_path_buf()))
 }
 
 /// 对已加载包编译链接。
-pub fn prepare_script_pack(pack: &ScriptPack, title: String) -> PlaySession {
+pub fn prepare_script_pack(
+    pack: &ScriptPack,
+    title: String,
+    game_root: std::path::PathBuf,
+) -> PlaySession {
     let natives = rgss_native_names();
     let mut statuses = Vec::new();
     let mut modules: Vec<(String, Module)> = Vec::new();
@@ -239,6 +246,7 @@ pub fn prepare_script_pack(pack: &ScriptPack, title: String) -> PlaySession {
 
     PlaySession {
         title,
+        game_root,
         linked,
         scripts: modules,
         compiled,
@@ -257,7 +265,7 @@ pub fn play_game_root(path: &Path) -> Result<PlayReport, PlayError> {
 
 /// 对已加载的脚本包执行编译链路。
 pub fn play_script_pack(pack: &ScriptPack) -> PlayReport {
-    let session = prepare_script_pack(pack, "RGSS".into());
+    let session = prepare_script_pack(pack, "RGSS".into(), std::path::PathBuf::new());
     run_session_headless(session)
 }
 
@@ -283,8 +291,10 @@ fn run_session_headless(session: PlaySession) -> PlayReport {
     match run_linked(
         session.linked,
         &session.scripts,
+        session.game_root.clone(),
         frames,
         max_frames,
+        None,
         None,
     ) {
         Ok((v, frame_count, methods)) => {
@@ -307,6 +317,7 @@ pub fn run_session_threaded(
     frames: Arc<AtomicU32>,
     sync: Arc<FrameSync>,
     max_frames: u32,
+    display: Option<Arc<crate::display::DisplayState>>,
 ) -> std::thread::JoinHandle<Result<(Value, u32, usize), VmError>> {
     std::thread::Builder::new()
         .name("rgss-vm".into())
@@ -320,9 +331,11 @@ pub fn run_session_threaded(
             run_linked(
                 session.linked,
                 &session.scripts,
+                session.game_root,
                 frames,
                 max_frames,
                 Some(sync),
+                display,
             )
         })
         .expect("spawn rgss-vm")
@@ -351,15 +364,28 @@ fn rgss_native_names() -> Vec<&'static str> {
         "rand",
         "FileTest_exist?",
         "RPG_Cache_title",
+        "Bitmap_initialize",
+        "Bitmap_fill_rect",
+        "Bitmap_blt",
+        "Bitmap_dispose",
+        "Sprite_initialize",
+        "Sprite_dispose",
+        "Sprite_update",
+        "Color_initialize",
+        "Rect_initialize",
+        "Viewport_initialize",
+        "Viewport_dispose",
     ]
 }
 
 fn run_linked(
     linked: Module,
     scripts: &[(String, Module)],
+    game_root: std::path::PathBuf,
     frames: Arc<AtomicU32>,
     max_frames: u32,
     sync: Option<Arc<FrameSync>>,
+    display: Option<Arc<crate::display::DisplayState>>,
 ) -> Result<(Value, u32, usize), VmError> {
     let method_count = linked.functions.len().saturating_sub(1);
     let native_names: Vec<String> = linked.native_names.clone();
@@ -368,6 +394,7 @@ fn run_linked(
         let n = name.clone();
         vm.register_native(n, |_ctx, _args| Ok(Value::Null));
     }
+    let display = display.unwrap_or_else(|| crate::display::DisplayState::new(game_root.clone()));
     let arm_budget = Arc::new(AtomicBool::new(false));
     register_rgss_natives(
         &mut vm,
@@ -375,7 +402,9 @@ fn run_linked(
         max_frames,
         arm_budget.clone(),
         sync.clone(),
+        display.clone(),
     );
+    crate::display::register_display_natives(&mut vm, display.clone());
     let mut host = StdHost;
     let mut last = Value::Null;
     let mut title_frames = 0u32;
@@ -387,7 +416,6 @@ fn run_linked(
         frames.store(0, Ordering::SeqCst);
         let is_main = name == "Main";
         arm_budget.store(is_main, Ordering::SeqCst);
-        // 有帧闸时不设帧数硬顶（由窗口 Esc / sync 退出）；无闸时用 max_frames。
         let step_cap = if is_main {
             if sync.is_some() {
                 u64::MAX / 4
@@ -395,7 +423,7 @@ fn run_linked(
                 20_000_000
             }
         } else {
-            50_000
+            500_000
         };
         vm.step_limit = step_cap;
         vm.call_hits.clear();
@@ -409,7 +437,17 @@ fn run_linked(
                     last = Value::Number(f as f64);
                     break;
                 }
-                eprintln!("rgss play: skip hang in [{name}] frames={f}");
+                let mut hits: Vec<_> = vm.call_hits.iter().collect();
+                hits.sort_by(|a, b| b.1.cmp(a.1));
+                let top: Vec<String> = hits
+                    .into_iter()
+                    .take(12)
+                    .map(|(k, v)| format!("{k}={v}"))
+                    .collect();
+                eprintln!(
+                    "rgss play: skip hang in [{name}] frames={f} hits={}",
+                    top.join(" ")
+                );
                 continue;
             }
             Err(e) => {
@@ -435,6 +473,7 @@ fn register_rgss_natives(
     max_frames: u32,
     arm_budget: Arc<AtomicBool>,
     sync: Option<Arc<FrameSync>>,
+    display: Arc<crate::display::DisplayState>,
 ) {
     vm.register_native("Graphics_freeze", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Graphics_transition", |_ctx, _args| Ok(Value::Null));
@@ -442,10 +481,12 @@ fn register_rgss_natives(
         let frames = frames.clone();
         let arm_budget = arm_budget.clone();
         let sync = sync.clone();
+        let display = display.clone();
         vm.register_native("Graphics_update", move |ctx, _args| {
             if !arm_budget.load(Ordering::SeqCst) {
                 return Ok(Value::Null);
             }
+            display.snapshot_from_heap(ctx.heap);
             if let Some(sync) = &sync {
                 if !sync.wait_frame() {
                     ctx.globals.insert("$scene".into(), Value::Null);
@@ -453,7 +494,6 @@ fn register_rgss_natives(
                 }
             }
             let n = frames.fetch_add(1, Ordering::SeqCst).saturating_add(1);
-            // 无帧闸时用 max_frames 结束；有闸时仅 sync 退出。
             if sync.is_none() && n >= max_frames {
                 ctx.globals.insert("$scene".into(), Value::Null);
                 return Err(VmError::CallOverflow);
@@ -466,9 +506,94 @@ fn register_rgss_natives(
     vm.register_native("Input_update", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Audio_me_stop", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Audio_bgs_stop", |_ctx, _args| Ok(Value::Null));
-    vm.register_native("FileTest_exist?", |_ctx, _args| Ok(Value::Bool(false)));
-    vm.register_native("load_data", |_ctx, _args| Ok(Value::Null));
-    vm.register_native("save_data", |_ctx, _args| Ok(Value::Null));
+    {
+        let root = display.game_root().to_path_buf();
+        vm.register_native("FileTest_exist?", move |ctx, args| {
+            let path = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Handle(h) => match ctx.heap.get(*h) {
+                        Ok(GcObject::String(s)) => Some(s.clone()),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .unwrap_or_default();
+            let full = if Path::new(&path).is_absolute() {
+                PathBuf::from(&path)
+            } else {
+                root.join(&path)
+            };
+            Ok(Value::Bool(full.is_file()))
+        });
+    }
+    {
+        let root = display.game_root().to_path_buf();
+        vm.register_native("load_data", move |ctx, args| {
+            let path = args
+                .first()
+                .and_then(|v| match v {
+                    Value::Handle(h) => match ctx.heap.get(*h) {
+                        Ok(GcObject::String(s)) => Some(s.clone()),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .unwrap_or_default();
+            let full = if Path::new(&path).is_absolute() {
+                PathBuf::from(&path)
+            } else {
+                root.join(&path)
+            };
+            if let Ok(bytes) = std::fs::read(&full) {
+                if let Ok(val) = load_marshal(&bytes) {
+                    return Ok(marshal_to_value(ctx, &val));
+                }
+            }
+            // 缺文件：标题进度等常用 Fixnum，回退 0。
+            Ok(Value::Number(0.0))
+        });
+    }
+    {
+        let root = display.game_root().to_path_buf();
+        vm.register_native("save_data", move |ctx, args| {
+            let obj = args.first().cloned().unwrap_or(Value::Null);
+            let path = args
+                .get(1)
+                .and_then(|v| match v {
+                    Value::Handle(h) => match ctx.heap.get(*h) {
+                        Ok(GcObject::String(s)) => Some(s.clone()),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .unwrap_or_default();
+            let full = if Path::new(&path).is_absolute() {
+                PathBuf::from(&path)
+            } else {
+                root.join(&path)
+            };
+            if let Some(parent) = full.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            // 仅写 Fixnum 最小 Marshal，够 RateProgress。
+            if let Some(n) = obj.as_number() {
+                let mut out = vec![4u8, 8, b'i'];
+                let i = n as i64;
+                if (0..=122).contains(&i) {
+                    out.push((i + 5) as u8);
+                } else if (-123..0).contains(&i) {
+                    out.push((i - 5) as u8);
+                } else {
+                    // 简化：四字节小端
+                    out.push(4);
+                    out.extend_from_slice(&(i as i32).to_le_bytes());
+                }
+                let _ = std::fs::write(&full, out);
+            }
+            Ok(Value::Null)
+        });
+    }
     vm.register_native("rand", |_ctx, _args| Ok(Value::Number(0.0)));
     vm.register_native("pow", |_ctx, args| {
         let a = args.first().and_then(|v| v.as_number()).unwrap_or(0.0);
@@ -478,7 +603,39 @@ fn register_rgss_natives(
     vm.register_native("Hash_new", |ctx, _args| {
         Ok(Value::Handle(ctx.heap.alloc(GcObject::Table(HashMap::new()))))
     });
-    vm.register_native("RPG_Cache_title", |ctx, _args| {
-        Ok(Value::Handle(ctx.heap.alloc(GcObject::Table(HashMap::new()))))
+    vm.register_native("Array_new", |ctx, args| {
+        let n = args
+            .first()
+            .and_then(|v| v.as_number())
+            .unwrap_or(0.0)
+            .max(0.0) as usize;
+        let n = n.min(100_000);
+        let fill = args.get(1).cloned().unwrap_or(Value::Null);
+        let elems = vec![fill; n];
+        Ok(Value::Handle(ctx.heap.alloc(GcObject::Array(elems))))
     });
+}
+
+fn marshal_to_value(ctx: &mut spark_vm::NativeCtx<'_>, val: &MarshalValue) -> Value {
+    match val {
+        MarshalValue::Nil => Value::Null,
+        MarshalValue::Bool(b) => Value::Bool(*b),
+        MarshalValue::Fixnum(n) => Value::Number(*n as f64),
+        MarshalValue::String(b) => {
+            let s = String::from_utf8_lossy(b).into_owned();
+            ctx.heap.alloc_string(s)
+        }
+        MarshalValue::Symbol(s) => ctx.heap.alloc_string(s.clone()),
+        MarshalValue::Array(items) => {
+            let elems: Vec<Value> = items.iter().map(|it| marshal_to_value(ctx, it)).collect();
+            Value::Handle(ctx.heap.alloc(GcObject::Array(elems)))
+        }
+        MarshalValue::Hash(map) => {
+            let mut table = HashMap::new();
+            for (k, v) in map {
+                table.insert(k.clone(), marshal_to_value(ctx, v));
+            }
+            Value::Handle(ctx.heap.alloc(GcObject::Table(table)))
+        }
+    }
 }

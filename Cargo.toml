@@ -23,6 +23,7 @@ rgss-napi = { path = "projects/bindings/rgss-napi" }
 rgss-wasm = { path = "projects/bindings/rgss-wasm" }
 encoding_rs = "0.8"
 flate2 = "1"
+image = { version = "0.25", default-features = true }
 napi = { version = "2", default-features = false, features = ["napi4"] }
 napi-derive = "2"
 # Spark：脚本链路。本机 path 覆盖放在已 gitignore 的 `.cargo/config.toml`。

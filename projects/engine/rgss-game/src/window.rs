@@ -1,13 +1,15 @@
 //! Spark 窗口宿主：与 VM 线程上的 `Graphics.update` 同频。
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-use spark_core::Color;
+use spark_core::{Color, Rect};
 use spark_engine::run_game;
-use spark_renderer::{DrawList, FrameCtx, GameHost, Key, WindowConfig};
+use spark_renderer::{DrawList, FrameCtx, GameHost, Key, TextureId, WindowConfig};
 
+use crate::display::DisplayState;
 use crate::play::{prepare_game_root, run_session_threaded, FrameSync, PlayError};
 
 /// 窗口 play 错误。
@@ -34,18 +36,27 @@ impl std::error::Error for WindowPlayError {}
 pub fn play_game_windowed(path: &Path) -> Result<(), WindowPlayError> {
     let session = prepare_game_root(path).map_err(WindowPlayError::Play)?;
     let title = session.title.clone();
+    let display = DisplayState::new(session.game_root.clone());
     let frames = Arc::new(AtomicU32::new(0));
     let sync = Arc::new(FrameSync::new());
     let max_frames = std::env::var("RGSS_MAX_FRAMES")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(u32::MAX);
-    let join = run_session_threaded(session, frames.clone(), sync.clone(), max_frames);
+    let join = run_session_threaded(
+        session,
+        frames.clone(),
+        sync.clone(),
+        max_frames,
+        Some(display.clone()),
+    );
 
     let host = RgssWindowHost {
         title: title.clone(),
         frames,
         sync: sync.clone(),
+        display,
+        textures: HashMap::new(),
         exit: false,
         vm_done: false,
         join: Some(join),
@@ -70,6 +81,8 @@ struct RgssWindowHost {
     title: String,
     frames: Arc<AtomicU32>,
     sync: Arc<FrameSync>,
+    display: Arc<DisplayState>,
+    textures: HashMap<u32, TextureId>,
     exit: bool,
     vm_done: bool,
     join: Option<std::thread::JoinHandle<Result<(spark_gc::Value, u32, usize), spark_vm::VmError>>>,
@@ -83,7 +96,6 @@ impl GameHost for RgssWindowHost {
             self.exit = true;
         }
 
-        // 放行一帧：标题循环里的 Graphics.update 与窗口同频。
         if !self.vm_done {
             self.sync.pump_frame();
         }
@@ -111,7 +123,6 @@ impl GameHost for RgssWindowHost {
                 if f > 0 {
                     self.status = format!("标题循环 frames={f}（Esc 退出）");
                 }
-                // 有限帧烟测：RGSS_MAX_FRAMES 到齐后自动关窗。
                 if let Ok(max) = std::env::var("RGSS_MAX_FRAMES") {
                     if let Ok(max) = max.parse::<u32>() {
                         if max > 0 && f >= max {
@@ -125,39 +136,82 @@ impl GameHost for RgssWindowHost {
     }
 
     fn draw(&mut self, draw: &mut DrawList) {
-        draw.clear = Color::rgba(0.08, 0.05, 0.12, 1.0);
-        draw.begin_hud();
-        // 深色底板，模拟标题氛围（尚无 Bitmap 上传）。
+        draw.clear = Color::rgba(0.05, 0.04, 0.08, 1.0);
+        draw.begin_world();
         draw.fill_rect(
-            spark_core::Rect {
+            Rect {
                 x: 0.0,
                 y: 0.0,
                 w: 640.0,
                 h: 480.0,
             },
-            Color::rgba(0.12, 0.08, 0.18, 1.0),
+            Color::rgba(0.08, 0.06, 0.12, 1.0),
         );
+
+        let snaps = self.display.take_frame_snap();
+        for snap in &snaps {
+            let Some(bid) = snap.bitmap_id else {
+                continue;
+            };
+            let Some(bmp) = self.display.bitmap(bid) else {
+                continue;
+            };
+            // 位图可能被 fill_rect / blt 改写，每帧重传像素。
+            let tex = if let Some(id) = self.textures.get(&bid).copied() {
+                let _ = draw.update_texture(id, bmp.width, bmp.height, bmp.rgba.clone());
+                id
+            } else {
+                match draw.create_texture(bmp.width, bmp.height, bmp.rgba.clone()) {
+                    Ok(id) => {
+                        self.textures.insert(bid, id);
+                        id
+                    }
+                    Err(_) => continue,
+                }
+            };
+            let w = bmp.width as f32 * snap.zoom_x;
+            let h = bmp.height as f32 * snap.zoom_y;
+            let a = snap.opacity.clamp(0.0, 1.0);
+            draw.tex_rect(
+                tex,
+                Rect {
+                    x: snap.x,
+                    y: snap.y,
+                    w,
+                    h,
+                },
+                Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 1.0,
+                    h: 1.0,
+                },
+                Color::rgba(1.0, 1.0, 1.0, a),
+            );
+        }
+
+        draw.begin_hud();
         draw.text(
-            24.0,
-            40.0,
-            28.0,
-            Color::rgba(0.95, 0.9, 0.85, 1.0),
+            12.0,
+            12.0,
+            18.0,
+            Color::rgba(0.95, 0.9, 0.85, 0.85),
             &self.title,
         );
         draw.text(
-            24.0,
-            90.0,
-            18.0,
-            Color::rgba(0.75, 0.7, 0.8, 1.0),
+            12.0,
+            36.0,
+            14.0,
+            Color::rgba(0.7, 0.75, 0.8, 0.8),
             &self.status,
         );
         let f = self.frames.load(Ordering::SeqCst);
         draw.text(
-            24.0,
-            130.0,
-            16.0,
-            Color::rgba(0.55, 0.85, 0.65, 1.0),
-            format!("Graphics.update = {f}"),
+            12.0,
+            56.0,
+            13.0,
+            Color::rgba(0.5, 0.85, 0.6, 0.8),
+            format!("Graphics.update = {f}  sprites = {}", snaps.len()),
         );
     }
 

@@ -3,6 +3,7 @@
 //!
 //! 产品入口：`rgss --path <游戏根>`（窗口），或 `rgss detect` / `rgss play`。
 
+mod display;
 mod play;
 mod window;
 
