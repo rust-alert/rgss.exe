@@ -10,11 +10,11 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { loadRgss } from "./index";
 
-const hostRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// 本包是 CommonJS，用 `__filename`（与 `index.ts` 一致），勿用 `import.meta`。
+const hostRoot = path.resolve(path.dirname(__filename), "..");
 const repoRoot = path.resolve(hostRoot, "..", "..", "..");
 
 function usage(): never {
