@@ -37,6 +37,7 @@ pub fn play_game_windowed(path: &Path) -> Result<(), WindowPlayError> {
     let session = prepare_game_root(path).map_err(WindowPlayError::Play)?;
     let title = session.title.clone();
     let display = DisplayState::new(session.game_root.clone());
+    let input = crate::input::InputPad::new();
     let frames = Arc::new(AtomicU32::new(0));
     let sync = Arc::new(FrameSync::new());
     let max_frames = std::env::var("RGSS_MAX_FRAMES")
@@ -49,6 +50,7 @@ pub fn play_game_windowed(path: &Path) -> Result<(), WindowPlayError> {
         sync.clone(),
         max_frames,
         Some(display.clone()),
+        input.clone(),
     );
 
     let host = RgssWindowHost {
@@ -56,6 +58,7 @@ pub fn play_game_windowed(path: &Path) -> Result<(), WindowPlayError> {
         frames,
         sync: sync.clone(),
         display,
+        input,
         textures: HashMap::new(),
         exit: false,
         vm_done: false,
@@ -82,6 +85,7 @@ struct RgssWindowHost {
     frames: Arc<AtomicU32>,
     sync: Arc<FrameSync>,
     display: Arc<DisplayState>,
+    input: Arc<crate::input::InputPad>,
     textures: HashMap<u32, TextureId>,
     exit: bool,
     vm_done: bool,
@@ -95,6 +99,7 @@ impl GameHost for RgssWindowHost {
             self.sync.request_exit();
             self.exit = true;
         }
+        self.input.sample(frame.input);
 
         if !self.vm_done {
             self.sync.pump_frame();

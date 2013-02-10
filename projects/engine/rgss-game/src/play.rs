@@ -296,6 +296,7 @@ fn run_session_headless(session: PlaySession) -> PlayReport {
         max_frames,
         None,
         None,
+        crate::input::InputPad::new(),
     ) {
         Ok((v, frame_count, methods)) => {
             report.ran_entry = true;
@@ -318,6 +319,7 @@ pub fn run_session_threaded(
     sync: Arc<FrameSync>,
     max_frames: u32,
     display: Option<Arc<crate::display::DisplayState>>,
+    input: Arc<crate::input::InputPad>,
 ) -> std::thread::JoinHandle<Result<(Value, u32, usize), VmError>> {
     std::thread::Builder::new()
         .name("rgss-vm".into())
@@ -336,6 +338,7 @@ pub fn run_session_threaded(
                 max_frames,
                 Some(sync),
                 display,
+                input,
             )
         })
         .expect("spawn rgss-vm")
@@ -353,6 +356,9 @@ fn rgss_native_names() -> Vec<&'static str> {
         "Graphics_update",
         "Font_default_name_set",
         "Input_update",
+        "Input_press?",
+        "Input_trigger?",
+        "Input_dir4",
         "Audio_me_stop",
         "Audio_bgs_stop",
         "print",
@@ -386,6 +392,7 @@ fn run_linked(
     max_frames: u32,
     sync: Option<Arc<FrameSync>>,
     display: Option<Arc<crate::display::DisplayState>>,
+    input: Arc<crate::input::InputPad>,
 ) -> Result<(Value, u32, usize), VmError> {
     let method_count = linked.functions.len().saturating_sub(1);
     let native_names: Vec<String> = linked.native_names.clone();
@@ -403,6 +410,7 @@ fn run_linked(
         arm_budget.clone(),
         sync.clone(),
         display.clone(),
+        input.clone(),
     );
     crate::display::register_display_natives(&mut vm, display.clone());
     let mut host = StdHost;
@@ -474,6 +482,7 @@ fn register_rgss_natives(
     arm_budget: Arc<AtomicBool>,
     sync: Option<Arc<FrameSync>>,
     display: Arc<crate::display::DisplayState>,
+    input: Arc<crate::input::InputPad>,
 ) {
     vm.register_native("Graphics_freeze", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Graphics_transition", |_ctx, _args| Ok(Value::Null));
@@ -504,6 +513,7 @@ fn register_rgss_natives(
     vm.register_native("Graphics_frame_rate", |_ctx, _args| Ok(Value::Number(60.0)));
     vm.register_native("Font_default_name_set", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Input_update", |_ctx, _args| Ok(Value::Null));
+    crate::input::register_input_natives(vm, input);
     vm.register_native("Audio_me_stop", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Audio_bgs_stop", |_ctx, _args| Ok(Value::Null));
     {
