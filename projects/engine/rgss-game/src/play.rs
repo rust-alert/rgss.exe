@@ -359,8 +359,17 @@ fn rgss_native_names() -> Vec<&'static str> {
         "Input_press?",
         "Input_trigger?",
         "Input_dir4",
-        "Audio_me_stop",
+        "Audio_bgm_play",
+        "Audio_bgm_stop",
+        "Audio_bgm_fade",
+        "Audio_bgs_play",
         "Audio_bgs_stop",
+        "Audio_bgs_fade",
+        "Audio_me_play",
+        "Audio_me_stop",
+        "Audio_me_fade",
+        "Audio_se_play",
+        "Audio_se_stop",
         "print",
         "puts",
         "p",
@@ -514,8 +523,7 @@ fn register_rgss_natives(
     vm.register_native("Font_default_name_set", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Input_update", |_ctx, _args| Ok(Value::Null));
     crate::input::register_input_natives(vm, input);
-    vm.register_native("Audio_me_stop", |_ctx, _args| Ok(Value::Null));
-    vm.register_native("Audio_bgs_stop", |_ctx, _args| Ok(Value::Null));
+    crate::audio::register_audio_natives(vm, crate::audio::AudioState::new());
     {
         let root = display.game_root().to_path_buf();
         vm.register_native("FileTest_exist?", move |ctx, args| {
