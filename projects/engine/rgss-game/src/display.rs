@@ -19,7 +19,45 @@ pub struct SpriteSnap {
     pub opacity: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
+    /// 源矩形（像素）。宽或高为 0 时表示整张位图。
+    pub src_x: f32,
+    pub src_y: f32,
+    pub src_w: f32,
+    pub src_h: f32,
     pub visible: bool,
+}
+
+/// 把 `src_rect` 像素矩形转成归一化 UV，并返回绘制宽高（已乘 zoom）。
+pub fn sprite_draw_uv(
+    bmp_w: u32,
+    bmp_h: u32,
+    src_x: f32,
+    src_y: f32,
+    src_w: f32,
+    src_h: f32,
+    zoom_x: f32,
+    zoom_y: f32,
+) -> (f32, f32, f32, f32, f32, f32) {
+    let bw = bmp_w.max(1) as f32;
+    let bh = bmp_h.max(1) as f32;
+    let use_full = src_w <= 0.0 || src_h <= 0.0;
+    let (sx, sy, sw, sh) = if use_full {
+        (0.0, 0.0, bw, bh)
+    } else {
+        (
+            src_x.clamp(0.0, bw),
+            src_y.clamp(0.0, bh),
+            src_w.min(bw - src_x.max(0.0)).max(0.0),
+            src_h.min(bh - src_y.max(0.0)).max(0.0),
+        )
+    };
+    let u0 = sx / bw;
+    let v0 = sy / bh;
+    let uw = if bw > 0.0 { sw / bw } else { 1.0 };
+    let vh = if bh > 0.0 { sh / bh } else { 1.0 };
+    let dw = sw * zoom_x;
+    let dh = sh * zoom_y;
+    (u0, v0, uw, vh, dw, dh)
 }
 
 /// CPU 位图。
@@ -127,8 +165,20 @@ impl DisplayState {
                     let z = num_field(map, "zoom_y");
                     if z == 0.0 { 1.0 } else { z }
                 },
+                src_x: 0.0,
+                src_y: 0.0,
+                src_w: 0.0,
+                src_h: 0.0,
                 visible: true,
             });
+            if let Some(last) = snaps.last_mut() {
+                if let Some((sx, sy, sw, sh)) = read_src_rect(heap, map) {
+                    last.src_x = sx;
+                    last.src_y = sy;
+                    last.src_w = sw;
+                    last.src_h = sh;
+                }
+            }
         }
         snaps.sort_by_key(|s| s.z);
         if let Ok(mut slot) = self.frame_snap.lock() {
@@ -149,6 +199,22 @@ fn num_field(map: &HashMap<String, Value>, key: &str) -> f32 {
     map.get(key)
         .and_then(|v| v.as_number())
         .unwrap_or(0.0) as f32
+}
+
+/// 从 Sprite 表读 `src_rect`（Rect 表：x/y/width/height）。
+fn read_src_rect(heap: &spark_gc::Heap, map: &HashMap<String, Value>) -> Option<(f32, f32, f32, f32)> {
+    let Value::Handle(h) = map.get("src_rect")? else {
+        return None;
+    };
+    let Ok(GcObject::Table(rect)) = heap.get(*h) else {
+        return None;
+    };
+    Some((
+        num_field(rect, "x"),
+        num_field(rect, "y"),
+        num_field(rect, "width"),
+        num_field(rect, "height"),
+    ))
 }
 
 fn table_insert(ctx: &mut NativeCtx<'_>, recv: &Value, key: &str, val: Value) {
@@ -403,6 +469,17 @@ pub fn register_display_natives(vm: &mut spark_vm::Vm, display: Arc<DisplayState
             table_insert(ctx, &recv, "blend_type", Value::Number(0.0));
             table_insert(ctx, &recv, "visible", Value::Bool(true));
             table_insert(ctx, &recv, "bitmap", Value::Null);
+            // 默认空 Rect：绘制时宽/高为 0 → 使用整张位图。
+            let class_name = ctx.heap.alloc_string("Rect");
+            let rh = ctx.heap.alloc(GcObject::Table(HashMap::new()));
+            if let Ok(GcObject::Table(m)) = ctx.heap.get_mut(rh) {
+                m.insert("__class".into(), class_name);
+                m.insert("x".into(), Value::Number(0.0));
+                m.insert("y".into(), Value::Number(0.0));
+                m.insert("width".into(), Value::Number(0.0));
+                m.insert("height".into(), Value::Number(0.0));
+            }
+            table_insert(ctx, &recv, "src_rect", Value::Handle(rh));
             if let Value::Handle(h) = &recv {
                 display.register_sprite(*h);
             }
@@ -536,5 +613,28 @@ fn blt_rgba(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sprite_draw_uv;
+
+    #[test]
+    fn full_bitmap_when_src_size_zero() {
+        let (u0, v0, uw, vh, dw, dh) = sprite_draw_uv(100, 50, 0.0, 0.0, 0.0, 0.0, 2.0, 1.0);
+        assert_eq!((u0, v0, uw, vh), (0.0, 0.0, 1.0, 1.0));
+        assert_eq!((dw, dh), (200.0, 50.0));
+    }
+
+    #[test]
+    fn cropped_src_rect_uv() {
+        let (u0, v0, uw, vh, dw, dh) =
+            sprite_draw_uv(200, 100, 50.0, 25.0, 100.0, 50.0, 1.0, 1.0);
+        assert!((u0 - 0.25).abs() < 1e-5);
+        assert!((v0 - 0.25).abs() < 1e-5);
+        assert!((uw - 0.5).abs() < 1e-5);
+        assert!((vh - 0.5).abs() < 1e-5);
+        assert_eq!((dw, dh), (100.0, 50.0));
     }
 }

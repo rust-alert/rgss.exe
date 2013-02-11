@@ -174,8 +174,16 @@ impl GameHost for RgssWindowHost {
                     Err(_) => continue,
                 }
             };
-            let w = bmp.width as f32 * snap.zoom_x;
-            let h = bmp.height as f32 * snap.zoom_y;
+            let (u0, v0, uw, vh, w, h) = crate::display::sprite_draw_uv(
+                bmp.width,
+                bmp.height,
+                snap.src_x,
+                snap.src_y,
+                snap.src_w,
+                snap.src_h,
+                snap.zoom_x,
+                snap.zoom_y,
+            );
             let a = snap.opacity.clamp(0.0, 1.0);
             draw.tex_rect(
                 tex,
@@ -186,10 +194,10 @@ impl GameHost for RgssWindowHost {
                     h,
                 },
                 Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    w: 1.0,
-                    h: 1.0,
+                    x: u0,
+                    y: v0,
+                    w: uw,
+                    h: vh,
                 },
                 Color::rgba(1.0, 1.0, 1.0, a),
             );
