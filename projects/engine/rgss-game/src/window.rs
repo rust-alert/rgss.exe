@@ -188,8 +188,8 @@ impl GameHost for RgssWindowHost {
             draw.tex_rect(
                 tex,
                 Rect {
-                    x: snap.x,
-                    y: snap.y,
+                    x: snap.x - snap.ox * snap.zoom_x,
+                    y: snap.y - snap.oy * snap.zoom_y,
                     w,
                     h,
                 },

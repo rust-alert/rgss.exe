@@ -19,6 +19,9 @@ pub struct SpriteSnap {
     pub opacity: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
+    /// 原点（位图像素），绘制时从 `x`/`y` 减去 `ox*zoom_x` / `oy*zoom_y`。
+    pub ox: f32,
+    pub oy: f32,
     /// 源矩形（像素）。宽或高为 0 时表示整张位图。
     pub src_x: f32,
     pub src_y: f32,
@@ -165,6 +168,8 @@ impl DisplayState {
                     let z = num_field(map, "zoom_y");
                     if z == 0.0 { 1.0 } else { z }
                 },
+                ox: num_field(map, "ox"),
+                oy: num_field(map, "oy"),
                 src_x: 0.0,
                 src_y: 0.0,
                 src_w: 0.0,
@@ -636,5 +641,18 @@ mod tests {
         assert!((uw - 0.5).abs() < 1e-5);
         assert!((vh - 0.5).abs() < 1e-5);
         assert_eq!((dw, dh), (100.0, 50.0));
+    }
+
+    #[test]
+    fn origin_offset_matches_rgss() {
+        // dest = (x - ox * zoom_x, y - oy * zoom_y)
+        let ox = 16.0;
+        let oy = 8.0;
+        let zoom_x = 2.0;
+        let zoom_y = 2.0;
+        let x = 100.0;
+        let y = 50.0;
+        assert_eq!(x - ox * zoom_x, 68.0);
+        assert_eq!(y - oy * zoom_y, 34.0);
     }
 }
