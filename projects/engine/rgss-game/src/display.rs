@@ -22,6 +22,8 @@ pub struct SpriteSnap {
     /// 原点（位图像素），绘制时从 `x`/`y` 减去 `ox*zoom_x` / `oy*zoom_y`。
     pub ox: f32,
     pub oy: f32,
+    /// RGSS `angle`（度，逆时针）。
+    pub angle_deg: f32,
     /// 源矩形（像素）。宽或高为 0 时表示整张位图。
     pub src_x: f32,
     pub src_y: f32,
@@ -170,6 +172,7 @@ impl DisplayState {
                 },
                 ox: num_field(map, "ox"),
                 oy: num_field(map, "oy"),
+                angle_deg: num_field(map, "angle"),
                 src_x: 0.0,
                 src_y: 0.0,
                 src_w: 0.0,
@@ -468,6 +471,7 @@ pub fn register_display_natives(vm: &mut spark_vm::Vm, display: Arc<DisplayState
             table_insert(ctx, &recv, "z", Value::Number(0.0));
             table_insert(ctx, &recv, "ox", Value::Number(0.0));
             table_insert(ctx, &recv, "oy", Value::Number(0.0));
+            table_insert(ctx, &recv, "angle", Value::Number(0.0));
             table_insert(ctx, &recv, "zoom_x", Value::Number(1.0));
             table_insert(ctx, &recv, "zoom_y", Value::Number(1.0));
             table_insert(ctx, &recv, "opacity", Value::Number(255.0));
@@ -654,5 +658,11 @@ mod tests {
         let y = 50.0;
         assert_eq!(x - ox * zoom_x, 68.0);
         assert_eq!(y - oy * zoom_y, 34.0);
+    }
+
+    #[test]
+    fn angle_degrees_to_radians() {
+        let deg = 90.0_f32;
+        assert!((deg.to_radians() - std::f32::consts::FRAC_PI_2).abs() < 1e-5);
     }
 }

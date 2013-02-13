@@ -185,14 +185,17 @@ impl GameHost for RgssWindowHost {
                 snap.zoom_y,
             );
             let a = snap.opacity.clamp(0.0, 1.0);
-            draw.tex_rect(
+            let dest = Rect {
+                x: snap.x - snap.ox * snap.zoom_x,
+                y: snap.y - snap.oy * snap.zoom_y,
+                w,
+                h,
+            };
+            // RGSS 绕 (x,y) 旋转，对应 dest 内枢轴 (ox*zoom, oy*zoom)。
+            let angle_rad = snap.angle_deg.to_radians();
+            draw.tex_rect_rot(
                 tex,
-                Rect {
-                    x: snap.x - snap.ox * snap.zoom_x,
-                    y: snap.y - snap.oy * snap.zoom_y,
-                    w,
-                    h,
-                },
+                dest,
                 Rect {
                     x: u0,
                     y: v0,
@@ -200,6 +203,9 @@ impl GameHost for RgssWindowHost {
                     h: vh,
                 },
                 Color::rgba(1.0, 1.0, 1.0, a),
+                angle_rad,
+                snap.ox * snap.zoom_x,
+                snap.oy * snap.zoom_y,
             );
         }
 
