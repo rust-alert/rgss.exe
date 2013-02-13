@@ -33,6 +33,7 @@ spark-gc = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "de
 spark-core = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
 spark-engine = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
 spark-renderer = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
+spark-audio = { git = "https://github.com/game-gpt/SparkleEngine.git", branch = "dev" }
 
 [profile.release]
 opt-level = 3

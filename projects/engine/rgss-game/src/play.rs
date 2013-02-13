@@ -523,7 +523,10 @@ fn register_rgss_natives(
     vm.register_native("Font_default_name_set", |_ctx, _args| Ok(Value::Null));
     vm.register_native("Input_update", |_ctx, _args| Ok(Value::Null));
     crate::input::register_input_natives(vm, input);
-    crate::audio::register_audio_natives(vm, crate::audio::AudioState::new());
+    crate::audio::register_audio_natives(
+        vm,
+        crate::audio::AudioState::new(display.game_root().to_path_buf()),
+    );
     {
         let root = display.game_root().to_path_buf();
         vm.register_native("FileTest_exist?", move |ctx, args| {

@@ -1,10 +1,11 @@
-//! RGSS `Audio` 模块：记录播放请求（尚无真实发声）。
+//! RGSS `Audio`：解析 `Audio/BGM|BGS|ME|SE` 下的文件并用 `spark-audio` 播放。
 //!
-//! 脚本常在标题/场景切换时调用 `bgm_play` / `se_play` 等。先提供完整方法面，
-//! 避免未注册宿主槽导致运行失败。后续可接 Spark 音频或系统播放器。
+//! MIDI 无法解码时仍记下 cue，但不发声。`fade` 目前等价于停止。
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use spark_audio::{AudioBus, AudioDecoder, Playback};
 use spark_gc::{GcObject, Value};
 use spark_vm::Vm;
 
@@ -17,36 +18,120 @@ pub struct AudioCue {
     pub pitch: f32,
 }
 
+/// 一路音频：最近一次请求，以及仍在响的句柄。
+#[derive(Default)]
+struct Slot {
+    cue: Option<AudioCue>,
+    play: Option<Playback>,
+}
+
 /// 跨帧可查询的 Audio 状态。
-#[derive(Debug, Default)]
 pub struct AudioState {
-    bgm: Mutex<Option<AudioCue>>,
-    bgs: Mutex<Option<AudioCue>>,
-    me: Mutex<Option<AudioCue>>,
-    se: Mutex<Option<AudioCue>>,
+    root: PathBuf,
+    bus: Mutex<Option<AudioBus>>,
+    bgm: Mutex<Slot>,
+    bgs: Mutex<Slot>,
+    me: Mutex<Slot>,
+    se: Mutex<Slot>,
 }
 
 impl AudioState {
-    /// 新建空状态。
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
+    /// 新建。设备在第一次真正播放时才打开。
+    pub fn new(game_root: PathBuf) -> Arc<Self> {
+        Arc::new(Self {
+            root: game_root,
+            bus: Mutex::new(None),
+            bgm: Mutex::new(Slot::default()),
+            bgs: Mutex::new(Slot::default()),
+            me: Mutex::new(Slot::default()),
+            se: Mutex::new(Slot::default()),
+        })
     }
 
     /// 最近一次 BGM 请求。
     pub fn last_bgm(&self) -> Option<AudioCue> {
-        self.bgm.lock().ok()?.clone()
+        self.bgm.lock().ok()?.cue.clone()
     }
 
     /// 最近一次 SE 请求。
     pub fn last_se(&self) -> Option<AudioCue> {
-        self.se.lock().ok()?.clone()
+        self.se.lock().ok()?.cue.clone()
     }
 
-    fn set(slot: &Mutex<Option<AudioCue>>, cue: Option<AudioCue>) {
-        if let Ok(mut g) = slot.lock() {
-            *g = cue;
+    fn play_kind(&self, kind: AudioKind, cue: AudioCue) {
+        let (folder, looping) = match kind {
+            AudioKind::Bgm => ("BGM", true),
+            AudioKind::Bgs => ("BGS", true),
+            AudioKind::Me => ("ME", false),
+            AudioKind::Se => ("SE", false),
+        };
+        let playback = resolve_audio_file(&self.root, folder, &cue.path).and_then(|path| {
+            let pcm = AudioDecoder::decode_path(&path, None).ok()?;
+            let mut guard = self.bus.lock().ok()?;
+            let bus = guard.get_or_insert_with(AudioBus::try_open);
+            let volume = (cue.volume / 100.0).clamp(0.0, 1.0);
+            let speed = if cue.pitch <= 0.0 {
+                1.0
+            } else {
+                (cue.pitch / 100.0).clamp(0.05, 4.0)
+            };
+            bus.start_pcm(&pcm, volume, speed, looping).ok().flatten()
+        });
+        if let Ok(mut g) = self.slot(kind).lock() {
+            g.play = playback;
+            g.cue = Some(cue);
         }
     }
+
+    fn stop_kind(&self, kind: AudioKind) {
+        if let Ok(mut g) = self.slot(kind).lock() {
+            g.play = None;
+            g.cue = None;
+        }
+    }
+
+    fn slot(&self, kind: AudioKind) -> &Mutex<Slot> {
+        match kind {
+            AudioKind::Bgm => &self.bgm,
+            AudioKind::Bgs => &self.bgs,
+            AudioKind::Me => &self.me,
+            AudioKind::Se => &self.se,
+        }
+    }
+}
+
+/// BGM / BGS 循环，ME / SE 一次。
+#[derive(Clone, Copy)]
+enum AudioKind {
+    Bgm,
+    Bgs,
+    Me,
+    Se,
+}
+
+/// 在游戏根下解析 RGSS 音频名。优先已存在的文件，否则试 `Audio/<folder>/<name>.<ext>`。
+///
+/// 同时存在时优先可解码格式（ogg/wav/mp3/flac），最后才是 mid。
+pub fn resolve_audio_file(root: &Path, folder: &str, name: &str) -> Option<PathBuf> {
+    let name = name.trim();
+    if name.is_empty() {
+        return None;
+    }
+    let direct = root.join(name);
+    if direct.is_file() {
+        return Some(direct);
+    }
+    let named = root.join("Audio").join(folder).join(name);
+    if named.is_file() {
+        return Some(named);
+    }
+    for ext in ["ogg", "wav", "mp3", "flac", "mid"] {
+        let candidate = named.with_extension(ext);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 fn path_from_value(heap: &spark_gc::Heap, v: &Value) -> String {
@@ -83,77 +168,77 @@ pub fn register_audio_natives(vm: &mut Vm, audio: Arc<AudioState>) {
     {
         let audio = audio.clone();
         vm.register_native("Audio_bgm_play", move |ctx, args| {
-            AudioState::set(&audio.bgm, Some(play_cue(ctx.heap, &args)));
+            audio.play_kind(AudioKind::Bgm, play_cue(ctx.heap, &args));
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_bgm_stop", move |_ctx, _args| {
-            AudioState::set(&audio.bgm, None);
+            audio.stop_kind(AudioKind::Bgm);
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_bgm_fade", move |_ctx, _args| {
-            AudioState::set(&audio.bgm, None);
+            audio.stop_kind(AudioKind::Bgm);
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_bgs_play", move |ctx, args| {
-            AudioState::set(&audio.bgs, Some(play_cue(ctx.heap, &args)));
+            audio.play_kind(AudioKind::Bgs, play_cue(ctx.heap, &args));
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_bgs_stop", move |_ctx, _args| {
-            AudioState::set(&audio.bgs, None);
+            audio.stop_kind(AudioKind::Bgs);
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_bgs_fade", move |_ctx, _args| {
-            AudioState::set(&audio.bgs, None);
+            audio.stop_kind(AudioKind::Bgs);
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_me_play", move |ctx, args| {
-            AudioState::set(&audio.me, Some(play_cue(ctx.heap, &args)));
+            audio.play_kind(AudioKind::Me, play_cue(ctx.heap, &args));
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_me_stop", move |_ctx, _args| {
-            AudioState::set(&audio.me, None);
+            audio.stop_kind(AudioKind::Me);
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_me_fade", move |_ctx, _args| {
-            AudioState::set(&audio.me, None);
+            audio.stop_kind(AudioKind::Me);
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_se_play", move |ctx, args| {
-            AudioState::set(&audio.se, Some(play_cue(ctx.heap, &args)));
+            audio.play_kind(AudioKind::Se, play_cue(ctx.heap, &args));
             Ok(Value::Null)
         });
     }
     {
         let audio = audio.clone();
         vm.register_native("Audio_se_stop", move |_ctx, _args| {
-            AudioState::set(&audio.se, None);
+            audio.stop_kind(AudioKind::Se);
             Ok(Value::Null)
         });
     }
@@ -176,25 +261,35 @@ mod tests {
 
     #[test]
     fn bgm_play_records_cue() {
-        let audio = AudioState::new();
+        let audio = AudioState::new(PathBuf::from("."));
         let mut heap = Heap::new();
         let path = heap.alloc_string("Theme2");
-        AudioState::set(
-            &audio.bgm,
-            Some(play_cue(
-                &heap,
-                &[path, Value::Number(80.0), Value::Number(110.0)],
-            )),
+        audio.play_kind(
+            AudioKind::Bgm,
+            play_cue(&heap, &[path, Value::Number(80.0), Value::Number(110.0)]),
         );
         let cue = audio.last_bgm().expect("bgm");
         assert_eq!(cue.path, "Theme2");
         assert_eq!(cue.volume, 80.0);
         assert_eq!(cue.pitch, 110.0);
-        AudioState::set(&audio.bgm, None);
+        audio.stop_kind(AudioKind::Bgm);
         assert!(audio.last_bgm().is_none());
 
         let se_path = heap.alloc_string("Cursor1");
-        AudioState::set(&audio.se, Some(play_cue(&heap, &[se_path])));
+        audio.play_kind(AudioKind::Se, play_cue(&heap, &[se_path]));
         assert_eq!(audio.last_se().expect("se").path, "Cursor1");
+    }
+
+    #[test]
+    fn resolve_prefers_ogg_over_mid() {
+        let dir = std::env::temp_dir().join(format!("rgss-audio-{}", std::process::id()));
+        let bgm = dir.join("Audio").join("BGM");
+        std::fs::create_dir_all(&bgm).unwrap();
+        std::fs::write(bgm.join("Theme.mid"), b"MThd").unwrap();
+        std::fs::write(bgm.join("Theme.ogg"), b"OggS").unwrap();
+        let found = resolve_audio_file(&dir, "BGM", "Theme").expect("file");
+        assert_eq!(found.extension().and_then(|e| e.to_str()), Some("ogg"));
+        assert!(resolve_audio_file(&dir, "BGM", "").is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

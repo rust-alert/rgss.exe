@@ -25,4 +25,5 @@ spark-gc = { workspace = true }
 spark-core = { workspace = true }
 spark-engine = { workspace = true }
 spark-renderer = { workspace = true }
+spark-audio = { workspace = true }
 image = { workspace = true }
