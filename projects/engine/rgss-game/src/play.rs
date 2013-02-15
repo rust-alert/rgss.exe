@@ -521,7 +521,6 @@ fn register_rgss_natives(
     }
     vm.register_native("Graphics_frame_rate", |_ctx, _args| Ok(Value::Number(60.0)));
     vm.register_native("Font_default_name_set", |_ctx, _args| Ok(Value::Null));
-    vm.register_native("Input_update", |_ctx, _args| Ok(Value::Null));
     crate::input::register_input_natives(vm, input);
     crate::audio::register_audio_natives(
         vm,

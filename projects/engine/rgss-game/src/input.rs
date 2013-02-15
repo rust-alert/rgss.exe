@@ -1,4 +1,4 @@
-//! RGSS `Input` 键位快照。窗口线程每帧采样，脚本经 native 只读。
+//! RGSS `Input` 键位快照。窗口线程采样 raw 态，脚本经 `Input.update` 提交边沿。
 //!
 //! 键码沿用 RPG Maker XP 公开常量：方向 2/4/6/8，确认键 C=13。
 
@@ -23,9 +23,20 @@ pub const KEY_B: u32 = 12;
 pub const KEY_C: u32 = 13;
 
 /// 跨线程键位。bit `1 << code` 对应 RGSS 键码（码须 < 31）。
+///
+/// 窗口每帧 [`InputPad::sample`] 写入 pending；脚本 [`InputPad::update`] 才把
+/// 按下态与 `trigger?` 边沿提交给脚本可读快照。
 #[derive(Debug, Default)]
 pub struct InputPad {
+    /// 窗口最近采样的按下掩码。
+    pending_down: AtomicU32,
+    /// 自上次 `update` 以来累积的按下边沿（含 `key_pressed`）。
+    pending_pressed: AtomicU32,
+    /// 上次 `update` 提交的按下掩码。
+    prev_down: AtomicU32,
+    /// 脚本可见：当前按下。
     down: AtomicU32,
+    /// 脚本可见：本周期触发边沿。
     trigger: AtomicU32,
 }
 
@@ -35,10 +46,10 @@ impl InputPad {
         Arc::new(Self::default())
     }
 
-    /// 用本帧输入覆盖按下与触发边沿。
+    /// 窗口线程：写入 pending，不立刻改脚本可见的 `trigger?`。
     pub fn sample(&self, input: &spark_renderer::Input) {
         let mut down = 0u32;
-        let mut trigger = 0u32;
+        let mut pressed = 0u32;
         let mut mark = |code: u32, key: Key| {
             if code >= 31 {
                 return;
@@ -48,7 +59,7 @@ impl InputPad {
                 down |= bit;
             }
             if input.key_pressed(key) {
-                trigger |= bit;
+                pressed |= bit;
             }
         };
         mark(KEY_DOWN, Key::Down);
@@ -66,34 +77,57 @@ impl InputPad {
             down |= 1 << KEY_DOWN;
         }
         if input.key_pressed(Key::S) {
-            trigger |= 1 << KEY_DOWN;
+            pressed |= 1 << KEY_DOWN;
         }
         if input.key_down(Key::A) {
             down |= 1 << KEY_LEFT;
         }
         if input.key_pressed(Key::A) {
-            trigger |= 1 << KEY_LEFT;
+            pressed |= 1 << KEY_LEFT;
         }
         if input.key_down(Key::D) {
             down |= 1 << KEY_RIGHT;
         }
         if input.key_pressed(Key::D) {
-            trigger |= 1 << KEY_RIGHT;
+            pressed |= 1 << KEY_RIGHT;
         }
         if input.key_down(Key::W) {
             down |= 1 << KEY_UP;
         }
         if input.key_pressed(Key::W) {
-            trigger |= 1 << KEY_UP;
+            pressed |= 1 << KEY_UP;
         }
+        self.pending_down.store(down, Ordering::SeqCst);
+        let _ = self
+            .pending_pressed
+            .fetch_or(pressed, Ordering::SeqCst);
+    }
+
+    /// `Input.update`：提交按下态，并计算相对上一拍的触发边沿。
+    pub fn update(&self) {
+        let pending = self.pending_down.load(Ordering::SeqCst);
+        let pressed = self.pending_pressed.swap(0, Ordering::SeqCst);
+        let prev = self.prev_down.load(Ordering::SeqCst);
+        let rising = pending & !prev;
+        let trigger = pressed | rising;
+        self.down.store(pending, Ordering::SeqCst);
+        self.trigger.store(trigger, Ordering::SeqCst);
+        self.prev_down.store(pending, Ordering::SeqCst);
+    }
+
+    /// 测试或回放：直接写入脚本可见掩码（并同步 prev，避免下次 `update` 误触发）。
+    pub fn set_masks(&self, down: u32, trigger: u32) {
+        self.pending_down.store(down, Ordering::SeqCst);
+        self.pending_pressed.store(0, Ordering::SeqCst);
+        self.prev_down.store(down, Ordering::SeqCst);
         self.down.store(down, Ordering::SeqCst);
         self.trigger.store(trigger, Ordering::SeqCst);
     }
 
-    /// 测试或回放直接写入掩码。
-    pub fn set_masks(&self, down: u32, trigger: u32) {
-        self.down.store(down, Ordering::SeqCst);
-        self.trigger.store(trigger, Ordering::SeqCst);
+    /// 测试：只写 pending，供 `update` 提交。
+    pub fn set_pending(&self, down: u32, pressed: u32) {
+        self.pending_down.store(down, Ordering::SeqCst);
+        self.pending_pressed.store(pressed, Ordering::SeqCst);
     }
 
     /// `Input.press?`
@@ -148,8 +182,13 @@ pub fn register_input_natives(vm: &mut spark_vm::Vm, pad: Arc<InputPad>) {
         let code = args.first().and_then(|v| v.as_number()).unwrap_or(0.0) as u32;
         Ok(spark_gc::Value::Bool(trig.trigger(code)))
     });
+    let dir = pad.clone();
     vm.register_native("Input_dir4", move |_ctx, _args| {
-        Ok(spark_gc::Value::Number(pad.dir4() as f64))
+        Ok(spark_gc::Value::Number(dir.dir4() as f64))
+    });
+    vm.register_native("Input_update", move |_ctx, _args| {
+        pad.update();
+        Ok(spark_gc::Value::Null)
     });
 }
 
@@ -166,6 +205,29 @@ mod tests {
         assert!(!pad.trigger(KEY_UP));
         pad.set_masks((1 << KEY_UP) | (1 << KEY_RIGHT), 1 << KEY_C);
         assert_eq!(pad.dir4(), 0);
+        assert!(pad.trigger(KEY_C));
+    }
+
+    #[test]
+    fn update_latches_rising_edge() {
+        let pad = InputPad::new();
+        pad.set_pending(1 << KEY_C, 0);
+        assert!(!pad.trigger(KEY_C));
+        assert!(!pad.press(KEY_C));
+        pad.update();
+        assert!(pad.press(KEY_C));
+        assert!(pad.trigger(KEY_C));
+        // 仍按住：再次 update 不应再 trigger。
+        pad.set_pending(1 << KEY_C, 0);
+        pad.update();
+        assert!(pad.press(KEY_C));
+        assert!(!pad.trigger(KEY_C));
+        // 松开再按下。
+        pad.set_pending(0, 0);
+        pad.update();
+        assert!(!pad.press(KEY_C));
+        pad.set_pending(1 << KEY_C, 1 << KEY_C);
+        pad.update();
         assert!(pad.trigger(KEY_C));
     }
 }
