@@ -1,9 +1,11 @@
 //! RGSS `Audio`：解析 `Audio/BGM|BGS|ME|SE` 下的文件并用 `spark-audio` 播放。
 //!
-//! MIDI 无法解码时仍记下 cue，但不发声。`fade` 目前等价于停止。
+//! MIDI 无法解码时仍记下 cue，但不发声。`fade(time)` 在后台按毫秒渐降音量后停止。
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 use spark_audio::{AudioBus, AudioDecoder, Playback};
 use spark_gc::{GcObject, Value};
@@ -90,6 +92,26 @@ impl AudioState {
         }
     }
 
+    /// `Audio.xxx_fade(time)`：`time` 为毫秒。取出播放句柄后在后台渐降音量。
+    fn fade_kind(&self, kind: AudioKind, duration_ms: f32) {
+        let (play, start_vol) = {
+            let Ok(mut g) = self.slot(kind).lock() else {
+                return;
+            };
+            let start = g
+                .cue
+                .as_ref()
+                .map(|c| (c.volume / 100.0).clamp(0.0, 1.0))
+                .unwrap_or(1.0);
+            g.cue = None;
+            (g.play.take(), start)
+        };
+        let Some(play) = play else {
+            return;
+        };
+        fade_playback(play, start_vol, duration_ms);
+    }
+
     fn slot(&self, kind: AudioKind) -> &Mutex<Slot> {
         match kind {
             AudioKind::Bgm => &self.bgm,
@@ -98,6 +120,32 @@ impl AudioState {
             AudioKind::Se => &self.se,
         }
     }
+}
+
+/// 后台渐降音量后停止。`duration_ms < 1` 时立即停止。
+fn fade_playback(play: Playback, start_vol: f32, duration_ms: f32) {
+    if duration_ms < 1.0 {
+        play.stop();
+        return;
+    }
+    thread::spawn(move || {
+        let steps = ((duration_ms / 50.0).ceil() as u32).clamp(4, 40);
+        let step = Duration::from_millis((duration_ms / steps as f32).max(1.0) as u64);
+        for i in 1..=steps {
+            let t = i as f32 / steps as f32;
+            play.set_volume(start_vol * (1.0 - t));
+            thread::sleep(step);
+        }
+        play.stop();
+    });
+}
+
+/// 渐降步数（供测试）。
+pub fn fade_step_count(duration_ms: f32) -> u32 {
+    if duration_ms < 1.0 {
+        return 0;
+    }
+    ((duration_ms / 50.0).ceil() as u32).clamp(4, 40)
 }
 
 /// BGM / BGS 循环，ME / SE 一次。
@@ -181,8 +229,9 @@ pub fn register_audio_natives(vm: &mut Vm, audio: Arc<AudioState>) {
     }
     {
         let audio = audio.clone();
-        vm.register_native("Audio_bgm_fade", move |_ctx, _args| {
-            audio.stop_kind(AudioKind::Bgm);
+        vm.register_native("Audio_bgm_fade", move |_ctx, args| {
+            let ms = num_arg(&args, 0, 0.0);
+            audio.fade_kind(AudioKind::Bgm, ms);
             Ok(Value::Null)
         });
     }
@@ -202,8 +251,9 @@ pub fn register_audio_natives(vm: &mut Vm, audio: Arc<AudioState>) {
     }
     {
         let audio = audio.clone();
-        vm.register_native("Audio_bgs_fade", move |_ctx, _args| {
-            audio.stop_kind(AudioKind::Bgs);
+        vm.register_native("Audio_bgs_fade", move |_ctx, args| {
+            let ms = num_arg(&args, 0, 0.0);
+            audio.fade_kind(AudioKind::Bgs, ms);
             Ok(Value::Null)
         });
     }
@@ -223,8 +273,9 @@ pub fn register_audio_natives(vm: &mut Vm, audio: Arc<AudioState>) {
     }
     {
         let audio = audio.clone();
-        vm.register_native("Audio_me_fade", move |_ctx, _args| {
-            audio.stop_kind(AudioKind::Me);
+        vm.register_native("Audio_me_fade", move |_ctx, args| {
+            let ms = num_arg(&args, 0, 0.0);
+            audio.fade_kind(AudioKind::Me, ms);
             Ok(Value::Null)
         });
     }
@@ -278,6 +329,14 @@ mod tests {
         let se_path = heap.alloc_string("Cursor1");
         audio.play_kind(AudioKind::Se, play_cue(&heap, &[se_path]));
         assert_eq!(audio.last_se().expect("se").path, "Cursor1");
+    }
+
+    #[test]
+    fn fade_step_count_clamps() {
+        assert_eq!(fade_step_count(0.0), 0);
+        assert_eq!(fade_step_count(100.0), 4);
+        assert_eq!(fade_step_count(1000.0), 20);
+        assert_eq!(fade_step_count(10_000.0), 40);
     }
 
     #[test]
