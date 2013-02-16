@@ -293,6 +293,14 @@ pub fn register_audio_natives(vm: &mut Vm, audio: Arc<AudioState>) {
             Ok(Value::Null)
         });
     }
+    {
+        let audio = audio.clone();
+        vm.register_native("Audio_se_fade", move |_ctx, args| {
+            let ms = num_arg(&args, 0, 0.0);
+            audio.fade_kind(AudioKind::Se, ms);
+            Ok(Value::Null)
+        });
+    }
 }
 
 #[cfg(test)]

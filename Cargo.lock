@@ -3219,6 +3219,7 @@ dependencies = [
  "spark-diagnostics",
  "spark-gc",
  "spark-script-ir",
+ "spark-script-valkyrie",
  "spark-vm",
 ]
 
@@ -3231,6 +3232,7 @@ dependencies = [
  "spark-diagnostics",
  "spark-gc",
  "spark-script-ir",
+ "spark-script-valkyrie",
  "spark-vm",
 ]
 

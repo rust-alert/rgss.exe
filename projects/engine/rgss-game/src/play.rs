@@ -353,6 +353,7 @@ fn rgss_native_names() -> Vec<&'static str> {
         "Graphics_freeze",
         "Graphics_transition",
         "Graphics_frame_rate",
+        "Graphics_frame_count",
         "Graphics_update",
         "Font_default_name_set",
         "Input_update",
@@ -370,6 +371,7 @@ fn rgss_native_names() -> Vec<&'static str> {
         "Audio_me_fade",
         "Audio_se_play",
         "Audio_se_stop",
+        "Audio_se_fade",
         "print",
         "puts",
         "p",
@@ -520,6 +522,12 @@ fn register_rgss_natives(
         });
     }
     vm.register_native("Graphics_frame_rate", |_ctx, _args| Ok(Value::Number(60.0)));
+    {
+        let frames = frames.clone();
+        vm.register_native("Graphics_frame_count", move |_ctx, _args| {
+            Ok(Value::Number(frames.load(Ordering::SeqCst) as f64))
+        });
+    }
     vm.register_native("Font_default_name_set", |_ctx, _args| Ok(Value::Null));
     crate::input::register_input_natives(vm, input);
     crate::audio::register_audio_natives(
