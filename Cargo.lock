@@ -1810,6 +1810,7 @@ dependencies = [
 [[package]]
 name = "oak-core"
 version = "0.0.12"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "serde",
  "smallvec",
@@ -1821,7 +1822,7 @@ dependencies = [
 [[package]]
 name = "oak-dejavu"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "arcstr",
  "bigdecimal",
@@ -1838,7 +1839,7 @@ dependencies = [
 [[package]]
 name = "oak-lua"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "oak-core",
  "serde",
@@ -1848,7 +1849,7 @@ dependencies = [
 [[package]]
 name = "oak-macros"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1858,6 +1859,7 @@ dependencies = [
 [[package]]
 name = "oak-ruby"
 version = "0.0.12"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "oak-core",
  "serde",
@@ -1867,7 +1869,7 @@ dependencies = [
 [[package]]
 name = "oak-valkyrie"
 version = "0.0.12"
-source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#c842f0000267c430b66119d2d3e7419ff87b65e8"
+source = "git+https://github.com/ygg-lang/oaks.git?branch=dev#b3b3984263a82ebb60b53b925ab20df22dc067f4"
 dependencies = [
  "oak-core",
  "oak-dejavu",
@@ -3035,6 +3037,7 @@ dependencies = [
 [[package]]
 name = "spark-asset"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "tracing",
@@ -3043,6 +3046,7 @@ dependencies = [
 [[package]]
 name = "spark-audio"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "rodio",
  "spark-core",
@@ -3053,6 +3057,7 @@ dependencies = [
 [[package]]
 name = "spark-core"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-diagnostics",
 ]
@@ -3060,10 +3065,12 @@ dependencies = [
 [[package]]
 name = "spark-diagnostics"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 
 [[package]]
 name = "spark-ecs"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
 ]
@@ -3071,6 +3078,7 @@ dependencies = [
 [[package]]
 name = "spark-engine"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "spark-diagnostics",
@@ -3092,6 +3100,7 @@ dependencies = [
 [[package]]
 name = "spark-event"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
 ]
@@ -3099,6 +3108,7 @@ dependencies = [
 [[package]]
 name = "spark-font"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "fontdue",
  "spark-core",
@@ -3108,6 +3118,7 @@ dependencies = [
 [[package]]
 name = "spark-gc"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
 ]
@@ -3115,6 +3126,7 @@ dependencies = [
 [[package]]
 name = "spark-geometry"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
 ]
@@ -3122,10 +3134,12 @@ dependencies = [
 [[package]]
 name = "spark-input"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 
 [[package]]
 name = "spark-jit"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "spark-vm",
@@ -3134,6 +3148,7 @@ dependencies = [
 [[package]]
 name = "spark-localization"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "serde",
  "serde_json",
@@ -3144,6 +3159,7 @@ dependencies = [
 [[package]]
 name = "spark-media"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "symphonia",
@@ -3153,6 +3169,7 @@ dependencies = [
 [[package]]
 name = "spark-plugin"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-diagnostics",
  "spark-gc",
@@ -3163,6 +3180,7 @@ dependencies = [
 [[package]]
 name = "spark-renderer"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "spark-geometry",
@@ -3172,6 +3190,7 @@ dependencies = [
 [[package]]
 name = "spark-renderer-wgpu"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "bytemuck",
  "pollster",
@@ -3189,6 +3208,7 @@ dependencies = [
 [[package]]
 name = "spark-script"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "spark-diagnostics",
@@ -3204,6 +3224,7 @@ dependencies = [
 [[package]]
 name = "spark-script-ir"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-diagnostics",
  "spark-gc",
@@ -3213,6 +3234,7 @@ dependencies = [
 [[package]]
 name = "spark-script-lua"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "oak-core",
  "oak-lua",
@@ -3226,6 +3248,7 @@ dependencies = [
 [[package]]
 name = "spark-script-ruby"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "oak-core",
  "oak-ruby",
@@ -3239,6 +3262,7 @@ dependencies = [
 [[package]]
 name = "spark-script-valkyrie"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "oak-core",
  "oak-valkyrie",
@@ -3251,6 +3275,7 @@ dependencies = [
 [[package]]
 name = "spark-shader"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "wgpu",
@@ -3259,6 +3284,7 @@ dependencies = [
 [[package]]
 name = "spark-time"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
 ]
@@ -3266,6 +3292,7 @@ dependencies = [
 [[package]]
 name = "spark-vm"
 version = "0.1.0"
+source = "git+https://github.com/game-gpt/SparkleEngine.git?branch=dev#59d0e5182691b43e0a31b1831946858231eb3a94"
 dependencies = [
  "spark-core",
  "spark-diagnostics",
@@ -4639,11 +4666,3 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
-
-[[patch.unused]]
-name = "spark-debugger"
-version = "0.1.0"
-
-[[patch.unused]]
-name = "spark-logger"
-version = "0.1.0"
